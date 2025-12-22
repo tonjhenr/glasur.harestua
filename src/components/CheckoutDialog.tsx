@@ -17,18 +17,20 @@ type CheckoutDialogProps = {
   onOrderComplete: () => void;
 };
 
-export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: CheckoutDialogProps) {
+export function CheckoutDialog({ open, onClose, cart, total, itemKey, onOrderComplete }: CheckoutDialogProps) {
   const [step, setStep] = useState<'info' | 'payment'>('info');
   const [name, setName] = useState('');
+  const [levering, setLevering] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
+  const [result, setResult] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'vipps'>('card');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
 
-  const handleInfoSubmit = (e: React.FormEvent) => {
+  const handleInfoSubmit = async(e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !address.trim() || !phone.trim()) {
       toast.error('Vennligst fyll ut alle påkrevde felt');
@@ -49,8 +51,20 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
       toast.error('Telefonnummer må inneholde nøyaktig 8 siffer');
       return;
     }
+    const formData = new FormData(e.target);
+    formData.append("access_key", "b8124d32-df0d-4b12-8ada-55b50ccdda4d");
 
-    setStep('payment');
+    const response = await fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await response.json();
+    setResult(data.success ? 'Success' : 'Error');
+      if (data.success) {
+      setStep('payment');
+    };
+  
   };
 
   const handlePayment = () => {
@@ -69,6 +83,7 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
   const handleClose = () => {
     setStep('info');
     setName('');
+    setLevering('');
     setAddress('');
     setPhone('');
     setMessage('');
@@ -100,28 +115,40 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
               <Label htmlFor="name">Navn *</Label>
               <Input
                 id="name"
+                name= "navn"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ola Nordmann"
                 required
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="address">Adresse *</Label>
-              <Input
-                id="address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Eksempelveien 1, 1234 Oslo"
-                required
-              />
+              <Label htmlFor="name">Vil du ha varene levert?</Label>
+              <input 
+                type="checkbox" 
+                id="levering" 
+                name="levering"
+                value={levering}
+                onChange={(e) => setLevering(e.target.checked ? 'levering' : '')}>
+                </input>                
             </div>
-
+    {levering === 'levering' && (
+    <div className="space-y-2">
+      <Label htmlFor="address">Adresse *</Label>
+      <Input
+        id="address"
+        name="adresse"
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        placeholder="Eksempelveien 1, 1234 Oslo"
+      />
+    </div>
+    )}
             <div className="space-y-2">
               <Label htmlFor="phone">Telefonnummer *</Label>
               <Input
                 id="phone"
+                name="telefonnummer"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -134,17 +161,18 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
               <Label htmlFor="message">Annen beskjed</Label>
               <Textarea
                 id="message"
+                name="melding"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Eventuelle kommentarer til bestillingen..."
                 rows={3}
               />
             </div>
-
             <div className="pt-4 border-t">
               <div className="flex justify-between mb-4">
                 <span>Totalt å betale</span>
                 <span className="text-xl">{total} kr</span>
+                <input type="hidden" name="sum" value={total}></input>
               </div>
             </div>
 

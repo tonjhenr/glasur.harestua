@@ -65,7 +65,7 @@ export function ProductsPage({
       </div>
 
       {/* Category Filter */}
-      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+      <div className="flex gap-2 mb-8 overflow-x pb-2">
         {categories.map(category => (
           <Button
             key={category}

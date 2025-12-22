@@ -980,6 +980,11 @@
   .overflow-x-auto {
     overflow-x: auto;
   }
+  .overflow-x {
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
 
   .overflow-x-hidden {
     overflow-x: hidden;
