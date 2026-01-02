@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { Product, NewsItem } from '../App';
 import { Button } from './ui/button';
@@ -9,6 +9,8 @@ import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
+import { supabase, mapNyhetFromDB, mapNyhetToDB, NyheterDB } from '../assets/supabase-client';
+import { projectId, publicAnonKey } from '../assets/info';
 
 type AdminPageProps = {
   products: Product[];
@@ -22,9 +24,44 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
   const [editingNews, setEditingNews] = useState<NewsItem | null>(null);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [isNewsDialogOpen, setIsNewsDialogOpen] = useState(false);
+  const [isLoadingNews, setIsLoadingNews] = useState(true);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Fetch news from Supabase on component mount
+  useEffect(() => {
+    fetchNews();
+  }, []);
+
+  const fetchNews = async () => {
+    setIsLoadingNews(true);
+    try {
+      const { data, error } = await supabase
+        .from('nyheter')
+        .select('*');
+
+      if (error) {
+        console.error('Supabase error ved henting av nyheter:', error);
+        toast.error('Kunne ikke hente nyheter fra database');
+        return;
+      }
+
+      if (data) {
+        // Map database format to app format
+        const mappedNews = data.map((item: NyheterDB) => mapNyhetFromDB(item));
+        onUpdateNews(mappedNews);
+      }
+    } catch (error) {
+      console.error('Feil ved henting av nyheter:', error);
+      toast.error('Kunne ikke hente nyheter');
+    } finally {
+      setIsLoadingNews(false);
+    }
+  };
 
   // Sort news by date, newest first
-  const sortedNews = [...news].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedNews = [...news].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const handleSaveProduct = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -58,35 +95,170 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
     }
   };
 
-  const handleSaveNews = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveNews = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const newsItem: NewsItem = {
-      id: editingNews?.id || Date.now().toString(),
+    let imageUrl = editingNews?.image; // Keep existing image by default
+
+    // Upload new image if selected
+    if (selectedImage) {
+      setIsUploadingImage(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', selectedImage);
+
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/upload-image`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: uploadFormData,
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error uploading image:', errorData);
+          toast.error('Kunne ikke laste opp bilde');
+          setIsUploadingImage(false);
+          return;
+        }
+
+        const data = await response.json();
+        imageUrl = data.url;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        toast.error('Kunne ikke laste opp bilde');
+        setIsUploadingImage(false);
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    const newsItem = {
       title: formData.get('title') as string,
       content: formData.get('content') as string,
-      date: formData.get('date') as string,
-      image: formData.get('image') as string || undefined,
+      image: imageUrl,
     };
 
-    if (editingNews) {
-      onUpdateNews(news.map(n => n.id === newsItem.id ? newsItem : n));
-      toast.success('Nyhet oppdatert');
-    } else {
-      onUpdateNews([...news, newsItem]);
-      toast.success('Nyhet lagt til');
-    }
+    // Map to database format (Norwegian columns)
+    const dbNewsItem = mapNyhetToDB(newsItem);
 
-    setEditingNews(null);
-    setIsNewsDialogOpen(false);
+    try {
+      if (editingNews) {
+        // Update existing news
+        const { error } = await supabase
+          .from('nyheter')
+          .update(dbNewsItem)
+          .eq('id', editingNews.id);
+
+        if (error) {
+          console.error('Supabase error ved oppdatering:', error);
+          toast.error('Kunne ikke oppdatere nyhet');
+          return;
+        }
+        toast.success('Nyhet oppdatert');
+      } else {
+        // Insert new news - created_at will be set automatically by Supabase
+        const { error } = await supabase
+          .from('nyheter')
+          .insert([dbNewsItem]);
+
+        if (error) {
+          console.error('Supabase error ved lagring:', error);
+          toast.error('Kunne ikke lagre nyhet');
+          return;
+        }
+        toast.success('Nyhet lagt til');
+      }
+
+      // Refresh news list from database
+      await fetchNews();
+      setEditingNews(null);
+      setIsNewsDialogOpen(false);
+      setSelectedImage(null);
+      setImagePreview(null);
+    } catch (error) {
+      console.error('Feil ved lagring av nyhet:', error);
+      toast.error('Noe gikk galt ved lagring');
+    }
   };
 
-  const handleDeleteNews = (id: string) => {
+  const handleDeleteNews = async (id: string) => {
     if (confirm('Er du sikker på at du vil slette denne nyheten?')) {
-      onUpdateNews(news.filter(n => n.id !== id));
-      toast.success('Nyhet slettet');
+      try {
+        // Find the news item to get the image URL
+        const newsItem = news.find(n => n.id === id);
+
+        // Delete from database
+        const { error } = await supabase
+          .from('nyheter')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error('Supabase error ved sletting:', error);
+          toast.error('Kunne ikke slette nyhet');
+          return;
+        }
+
+        // Delete image from storage if it exists and is from our bucket
+        if (newsItem?.image && newsItem.image.includes('make-c190d631-news-images')) {
+          try {
+            await fetch(
+              `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/delete-image`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${publicAnonKey}`,
+                },
+                body: JSON.stringify({ url: newsItem.image }),
+              }
+            );
+          } catch (error) {
+            console.error('Error deleting image:', error);
+            // Continue even if image deletion fails
+          }
+        }
+
+        toast.success('Nyhet slettet');
+        // Refresh news list from database
+        await fetchNews();
+      } catch (error) {
+        console.error('Feil ved sletting av nyhet:', error);
+        toast.error('Noe gikk galt ved sletting');
+      }
     }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
+  const handleOpenNewsDialog = (newsItem: NewsItem | null) => {
+    setEditingNews(newsItem);
+    setIsNewsDialogOpen(true);
+    setSelectedImage(null);
+    setImagePreview(newsItem?.image || null);
   };
 
   return (
@@ -215,12 +387,12 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
             <h2 className="text-3xl">Nyhetsadministrasjon</h2>
             <Dialog open={isNewsDialogOpen} onOpenChange={setIsNewsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => setEditingNews(null)} className="w-full sm:w-auto">
+                <Button onClick={() => handleOpenNewsDialog(null)} className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Legg til nyhet
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingNews ? 'Rediger nyhet' : 'Legg til nyhet'}
@@ -250,25 +422,38 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                     />
                   </div>
                   <div>
-                    <Label htmlFor="date">Dato</Label>
+                    <Label htmlFor="uploadImage">Last opp bilde</Label>
                     <Input
-                      id="date"
-                      name="date"
-                      type="date"
-                      defaultValue={editingNews?.date}
-                      required
+                      id="uploadImage"
+                      name="uploadImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="cursor-pointer"
                     />
+                    <p className="text-sm text-neutral-500 mt-1">Velg et bilde fra din enhet (mobil eller PC)</p>
+                    {imagePreview && (
+                      <div className="mt-4">
+                        <img
+                          src={imagePreview}
+                          alt="Forhåndsvisning"
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRemoveImage}
+                          className="mt-2"
+                        >
+                          <div className="h-4 w-4 mr-2" />
+                          Fjern bilde
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <Label htmlFor="image">Bilde (søkeord for Unsplash)</Label>
-                    <Input
-                      id="image"
-                      name="image"
-                      defaultValue={editingNews?.image}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">
-                    Lagre
+                  <Button type="submit" className="w-full" disabled={isUploadingImage}>
+                    {isUploadingImage ? 'Laster opp...' : 'Lagre'}
                   </Button>
                 </form>
               </DialogContent>
@@ -281,19 +466,23 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                 <CardHeader>
                   <CardTitle>{item.title}</CardTitle>
                   <p className="text-neutral-500">
-                    {new Date(item.date).toLocaleDateString('nb-NO')}
+                    {new Date(item.created_at).toLocaleDateString('nb-NO')}
                   </p>
                 </CardHeader>
                 <CardContent>
+                  {item.image && (
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="w-full h-48 object-cover rounded-lg mb-4"
+                    />
+                  )}
                   <p className="mb-4 whitespace-pre-line">{item.content}</p>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        setEditingNews(item);
-                        setIsNewsDialogOpen(true);
-                      }}
+                      onClick={() => handleOpenNewsDialog(item)}
                     >
                       <Edit className="h-4 w-4 mr-2" />
                       Rediger

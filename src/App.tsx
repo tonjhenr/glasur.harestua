@@ -11,6 +11,7 @@ import {
 } from "./components/CustomerAccountPage";
 import { Footer } from "./components/Footer";
 import { Toaster } from "./components/ui/sonner";
+import { supabase, mapNyhetFromDB, NyheterDB } from './assets/supabase-client';
 
 export type Product = {
   id: string;
@@ -32,7 +33,7 @@ export type NewsItem = {
   id: string;
   title: string;
   content: string;
-  date: string;
+  created_at: string;
   image?: string;
 };
 
@@ -252,22 +253,33 @@ export default function App() {
     },
   ]);
 
-  const [news, setNews] = useState<NewsItem[]>([
-    {
-      id: "1",
-      title: "Velkommen til Glasur.Harestua!",
-      content:
-        "Vi er et lite, lokalt bakeri som brenner for håndverksmessig bakst. Alle våre produkter lages fra bunnen av med naturlige ingredienser og mye kjærlighet.",
-      date: "2025-12-15",
-    },
-    {
-      id: "2",
-      title: "Nye burgerbød uten ultraprosesserte ingredienser",
-      content:
-        "Vi er stolte av å kunne tilby friskbakte burgerbrød helt uten ultraprosesserte ingredienser. Perfekt til helgens grilling!",
-      date: "2025-12-18",
-    },
-  ]);
+    const [news, setNews] = useState<NewsItem[]>([]);
+
+  // Fetch news from Supabase on mount
+  useEffect(() => {
+    fetchNews();
+  }, []);
+
+  const fetchNews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("nyheter")
+        .select("*");
+
+      if (error) {
+        console.error("Database error ved henting av nyheter:", error);
+        return;
+      }
+
+      if (data) {
+        // Map database format to app format
+        const mappedNews = data.map((item: NyheterDB) => mapNyhetFromDB(item));
+        setNews(mappedNews);
+      }
+    } catch (error) {
+      console.error("Feil ved henting av nyheter:", error);
+    }
+  };
 
   const addToCart = (product: Product, variant?: string) => {
     setCart((prevCart) => {

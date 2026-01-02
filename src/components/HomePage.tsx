@@ -14,7 +14,7 @@ type HomePageProps = {
 
 export function HomePage({ news }: HomePageProps) {
   // Sort news by date, newest first
-  const sortedNews = [...news].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedNews = [...news].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -33,12 +33,12 @@ export function HomePage({ news }: HomePageProps) {
       <div>
         <h2 className="mb-6 text-3xl">Nyheter og informasjon</h2>
         <div className="grid grid-cols-1 gap-6 mb-8">
-          {sortedNews.map((item) => (
+             {sortedNews.map((item) => (
             <Card key={item.id}>
               <CardHeader>
                 <CardTitle>{item.title}</CardTitle>
                 <p className="text-neutral-500">
-                  {new Date(item.date).toLocaleDateString(
+                  {new Date(item.created_at).toLocaleDateString(
                     "nb-NO",
                     {
                       year: "numeric",

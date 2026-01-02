@@ -1564,7 +1564,17 @@
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 0;
   }
-
+.static{
+  position: fixed;
+  top: 7.25rem;  
+  right: 1.25rem;    
+}
+@media (max-width: 414px) {
+  .category-button {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}
   @media (hover: hover) {
     .hover\:bg-accent:hover {
       background-color: var(--accent);

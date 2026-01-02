@@ -17,7 +17,7 @@ type CheckoutDialogProps = {
   onOrderComplete: () => void;
 };
 
-export function CheckoutDialog({ open, onClose, cart, total, itemKey, onOrderComplete }: CheckoutDialogProps) {
+export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: CheckoutDialogProps) {
   const [step, setStep] = useState<'info' | 'payment'>('info');
   const [name, setName] = useState('');
   const [levering, setLevering] = useState('');
