@@ -14,12 +14,13 @@ type ProductOptionsDialogProps = {
 };
 
 export function ProductOptionsDialog({ product, open, onClose, onAddToCart }: ProductOptionsDialogProps) {
-  const [selectedVariant, setSelectedVariant] = useState<string>(product.variants?.[0] || '');
+  const [selectedVariant, setSelectedVariant] = useState<string>(product.types?.[0] || '');
   const [quantity, setQuantity] = useState(1);
 
   const calculatePrice = () => {
     // Special pricing for Focaccia: 3 for 90 kr
-    if (product.name === 'Focaccia 230g' && quantity >= 3) {
+    const isFocaccia = product.name.toLowerCase().includes('focaccia');
+    if (isFocaccia && quantity >= 3) {
       const sets = Math.floor(quantity / 3);
       const remainder = quantity % 3;
       return (sets * 90) + (remainder * product.price);
@@ -28,10 +29,10 @@ export function ProductOptionsDialog({ product, open, onClose, onAddToCart }: Pr
   };
 
   const handleAddToCart = () => {
-    onAddToCart(product, product.variants ? selectedVariant : null, quantity);
+    onAddToCart(product, product.hasMultipleTypes ? selectedVariant : null, quantity);
     onClose();
     setQuantity(1);
-    setSelectedVariant(product.variants?.[0] || '');
+    setSelectedVariant(product.types?.[0] || '');
   };
 
   const incrementQuantity = () => setQuantity(q => q + 1);
@@ -47,7 +48,7 @@ export function ProductOptionsDialog({ product, open, onClose, onAddToCart }: Pr
 
         <div className="space-y-6 py-4">
           {/* Variant Selection */}
-          {product.variants && product.variants.length > 0 && (
+          {product.types && product.types.length > 0 && (
             <div className="space-y-3">
               <Label>Velg type</Label>
               <Select value={selectedVariant} onValueChange={setSelectedVariant}>
@@ -55,7 +56,7 @@ export function ProductOptionsDialog({ product, open, onClose, onAddToCart }: Pr
                   <SelectValue placeholder="Velg type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {product.variants.map((variant) => (
+                  {product.types.map((variant) => (
                     <SelectItem key={variant} value={variant}>
                       {variant}
                     </SelectItem>

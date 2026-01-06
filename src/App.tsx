@@ -11,23 +11,9 @@ import {
 } from "./components/CustomerAccountPage";
 import { Footer } from "./components/Footer";
 import { Toaster } from "./components/ui/sonner";
-import { supabase, mapNyhetFromDB, NyheterDB } from './assets/supabase-client';
+import { supabase, mapNyhetFromDB, NyheterDB, mapProductFromDB, ProdukterDB, Product } from './assets/supabase-client';
+import { projectId, publicAnonKey } from './assets/info';
 
-export type Product = {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  image: string;
-  category: string;
-  variants?: string[];
-};
-
-export type CartItem = {
-  product: Product;
-  quantity: number;
-  variant?: string;
-};
 
 export type NewsItem = {
   id: string;
@@ -37,63 +23,93 @@ export type NewsItem = {
   image?: string;
 };
 
+export type { Product } from './assets/supabase-client';
+
+export type CartItem = {
+  product: Product;
+  quantity: number;
+  variant?: string;
+};
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<
-    "home" | "products" | "admin" | "login" | "account"
+    "home" | "products" | "admin" | "login" | "customer-account"
   >("home");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentCustomerId, setCurrentCustomerId] = useState<
-    string | null
-  >(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [customerData, setCustomerData] = useState<CustomerData | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
 
-  // Check if user is logged in on mount
+   // Fetch news from Supabase on component mount
   useEffect(() => {
-    const loggedIn =
-      localStorage.getItem("isLoggedIn") === "true";
-    const admin = localStorage.getItem("isAdmin") === "true";
-    const customerId = localStorage.getItem("customerId");
-    setIsLoggedIn(loggedIn);
-    setIsAdmin(admin);
-    setCurrentCustomerId(customerId);
+    fetchNews();
+    fetchProducts();
   }, []);
 
-  // Customer database
-  const [customers, setCustomers] = useState<CustomerData[]>([
-    {
-      id: "1",
-      name: "Kari Nordmann",
-      email: "kunde@test.no",
-      phone: "+47 123 45 678",
-      address: "Testveien 123, 1234 Testby",
-      password: "kunde123",
-    },
-  ]);
+  const fetchNews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("nyheter")
+        .select("*");
 
-  // Order history
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: "1001",
-      date: "2025-12-10",
-      items: [
-        { name: "Wienerbrødsnurrer", quantity: 4, price: 35 },
-        { name: "Konfekt", quantity: 2, price: 129 },
-      ],
-      total: 398,
-      status: "completed",
-    },
-    {
-      id: "1002",
-      date: "2025-12-05",
-      items: [
-        { name: "Hamburgerbrød", quantity: 6, price: 45 },
-        { name: "Focaccia 230g", quantity: 3, price: 90 },
-      ],
-      total: 360,
-      status: "completed",
-    },
-  ]);
+      if (error) {
+        console.error(
+          "Supabase error ved henting av nyheter:",
+          error,
+        );
+        return;
+      }
+
+      if (data) {
+        // Map database format to app format
+        const mappedNews = data.map((item: NyheterDB) =>
+          mapNyhetFromDB(item),
+        );
+        setNews(mappedNews);
+      }
+    } catch (error) {
+      console.error("Feil ved henting av nyheter:", error);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/products`,
+        {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(
+          "Error fetching products from server:",
+          errorData,
+        );
+        return;
+      }
+
+      const data = await response.json();
+      if (data.products) {
+        // Map database format to app format
+        const mappedProducts = data.products.map(
+          (item: any) => {
+            const productData = item as ProdukterDB;
+            const types = item.types || [];
+            return mapProductFromDB(productData, types);
+          },
+        );
+        setProducts(mappedProducts);
+      }
+    } catch (error) {
+      console.error("Feil ved henting av produkter:", error);
+    }
+  };
 
   const handleLogin = (
     username: string,
@@ -103,26 +119,25 @@ export default function App() {
     if (isAdminLogin) {
       // Admin login
       if (username === "admin" && password === "admin123") {
-        setIsLoggedIn(true);
-        setIsAdmin(true);
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.setItem("isAdmin", "true");
+        setIsAdminLoggedIn(true);
+        localStorage.setItem("isAdminLoggedIn", "true");
         setCurrentPage("admin");
         return true;
       }
     } else {
       // Customer login
-      const customer = customers.find(
-        (c) => c.email === username && c.password === password,
-      );
-      if (customer) {
-        setIsLoggedIn(true);
-        setIsAdmin(false);
-        setCurrentCustomerId(customer.id);
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.setItem("isAdmin", "false");
-        localStorage.setItem("customerId", customer.id);
-        setCurrentPage("account");
+      const customer = customerData;
+      if (
+        customer &&
+        customer.email === username &&
+        customer.password === password
+      ) {
+        setCustomerData(customer);
+        localStorage.setItem(
+          "customerData",
+          JSON.stringify(customer),
+        );
+        setCurrentPage("customer-account");
         return true;
       }
     }
@@ -135,7 +150,7 @@ export default function App() {
     name: string,
   ): boolean => {
     // Check if email already exists
-    if (customers.some((c) => c.email === email)) {
+    if (customerData && customerData.email === email) {
       return false;
     }
 
@@ -149,27 +164,35 @@ export default function App() {
       password,
     };
 
-    setCustomers([...customers, newCustomer]);
+    setCustomerData(newCustomer);
+    localStorage.setItem(
+      "customerData",
+      JSON.stringify(newCustomer),
+    );
     return true;
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setIsAdmin(false);
-    setCurrentCustomerId(null);
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("isAdmin");
-    localStorage.removeItem("customerId");
+    setIsAdminLoggedIn(false);
+    setCustomerData(null);
+    localStorage.removeItem("isAdminLoggedIn");
+    localStorage.removeItem("customerData");
     setCurrentPage("home");
   };
 
   const handleUpdateProfile = (data: Partial<CustomerData>) => {
-    if (!currentCustomerId) return;
+    if (!customerData) return;
 
-    setCustomers(
-      customers.map((c) =>
-        c.id === currentCustomerId ? { ...c, ...data } : c,
-      ),
+    setCustomerData({
+      ...customerData,
+      ...data,
+    });
+    localStorage.setItem(
+      "customerData",
+      JSON.stringify({
+        ...customerData,
+        ...data,
+      }),
     );
   };
 
@@ -177,108 +200,25 @@ export default function App() {
     oldPassword: string,
     newPassword: string,
   ): boolean => {
-    if (!currentCustomerId) return false;
+    if (!customerData) return false;
 
-    const customer = customers.find(
-      (c) => c.id === currentCustomerId,
-    );
+    const customer = customerData;
     if (!customer || customer.password !== oldPassword) {
       return false;
     }
 
-    setCustomers(
-      customers.map((c) =>
-        c.id === currentCustomerId
-          ? { ...c, password: newPassword }
-          : c,
-      ),
+    setCustomerData({
+      ...customer,
+      password: newPassword,
+    });
+    localStorage.setItem(
+      "customerData",
+      JSON.stringify({
+        ...customer,
+        password: newPassword,
+      }),
     );
     return true;
-  };
-
-  const currentCustomer = customers.find(
-    (c) => c.id === currentCustomerId,
-  );
-  const customerOrders = currentCustomerId
-    ? orders.filter((o) => o.id.startsWith("100"))
-    : [];
-
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "1",
-      name: "Wienerbrødsnurrer",
-      description:
-        "Luftige wienerbrødsnurrer med smakfull fyll.",
-      price: 35,
-      image:
-        "https://idefull.no/wp-content/uploads/2021/05/Karamellsnurr-fs.jpg",
-      category: "wienerbrød",
-      variants: ["Kanel", "Karamell"],
-    },
-    {
-      id: "2",
-      name: "Konfekt",
-      description:
-        "Hjemmelaget konfekt i fire deilige varianter. Perfekt som gave eller godteri.",
-      price: 129,
-      image:
-        "https://plus.unsplash.com/premium_photo-1667031518595-9cb4b0d504ef?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-      category: "konfekt",
-      variants: [
-        "Salt karamell",
-        "Lakris",
-        "Pistasj",
-        "Jordbær",
-      ],
-    },
-    {
-      id: "3",
-      name: "Hamburgerbrød",
-      description:
-        "Myke og luftige hamburgerbrød. Perfekte til grillkvelden.",
-      price: 45,
-      image:
-        "https://plus.unsplash.com/premium_photo-1671403964073-c8cfede9e3cc?q=80&w=693&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-      category: "brød",
-      variants: ["Med sesamfrø", "Uten sesamfrø"],
-    },
-    {
-      id: "4",
-      name: "Focaccia 230g",
-      description: "1 stk for 35 kr, 3 stk for 90 kr",
-      price: 35,
-      image:
-        "https://images.unsplash.com/photo-1646851035330-f35fa5b44beb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmb2NhY2NpYSUyMGJyZWFkJTIwaXRhbGlhbnxlbnwxfHx8fDE3NjU4NzU3NzV8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      category: "brød",
-    },
-  ]);
-
-    const [news, setNews] = useState<NewsItem[]>([]);
-
-  // Fetch news from Supabase on mount
-  useEffect(() => {
-    fetchNews();
-  }, []);
-
-  const fetchNews = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("nyheter")
-        .select("*");
-
-      if (error) {
-        console.error("Database error ved henting av nyheter:", error);
-        return;
-      }
-
-      if (data) {
-        // Map database format to app format
-        const mappedNews = data.map((item: NyheterDB) => mapNyhetFromDB(item));
-        setNews(mappedNews);
-      }
-    } catch (error) {
-      console.error("Feil ved henting av nyheter:", error);
-    }
   };
 
   const addToCart = (product: Product, variant?: string) => {
@@ -338,8 +278,7 @@ export default function App() {
           (sum, item) => sum + item.quantity,
           0,
         )}
-        isLoggedIn={isLoggedIn}
-        isAdmin={isAdmin}
+        isAdmin={isAdminLoggedIn}
         onLogout={handleLogout}
       />
 
@@ -360,16 +299,16 @@ export default function App() {
             onRegister={handleRegister}
           />
         )}
-        {currentPage === "account" && currentCustomer && (
+        {currentPage === "customer-account" && customerData && (
           <CustomerAccountPage
-            customerData={currentCustomer}
-            orders={customerOrders}
+            customerData={customerData}
+            orders={orders}
             onUpdateProfile={handleUpdateProfile}
             onChangePassword={handleChangePassword}
           />
         )}
         {currentPage === "admin" &&
-          (isLoggedIn && isAdmin ? (
+          (isAdminLoggedIn ? (
             <AdminPage
               products={products}
               news={news}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, X } from 'lucide-react';
 import { Product, NewsItem } from '../App';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -8,8 +8,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner@2.0.3';
-import { supabase, mapNyhetFromDB, mapNyhetToDB, NyheterDB } from '../assets/supabase-client';
+import { supabase, mapNyhetFromDB, mapNyhetToDB, NyheterDB, mapProductFromDB, mapProductToDB, ProdukterDB } from '../assets/supabase-client';
 import { projectId, publicAnonKey } from '../assets/info';
 
 type AdminPageProps = {
@@ -25,11 +26,18 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [isNewsDialogOpen, setIsNewsDialogOpen] = useState(false);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [selectedProductImage, setSelectedProductImage] = useState<File | null>(null);
+  const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
+  const [isUploadingProductImage, setIsUploadingProductImage] = useState(false);
+  const [productImageRemoved, setProductImageRemoved] = useState(false);
+  const [hasMultipleTypes, setHasMultipleTypes] = useState(false);
 
-  // Fetch news from Supabase on component mount
+ // Fetch news from Supabase on component mount
   useEffect(() => {
     fetchNews();
   }, []);
@@ -37,19 +45,26 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
   const fetchNews = async () => {
     setIsLoadingNews(true);
     try {
-      const { data, error } = await supabase
-        .from('nyheter')
-        .select('*');
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/news`,
+        {
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        }
+      );
 
-      if (error) {
-        console.error('Supabase error ved henting av nyheter:', error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error fetching news from server:', errorData);
         toast.error('Kunne ikke hente nyheter fra database');
         return;
       }
 
-      if (data) {
+      const data = await response.json();
+      if (data.news) {
         // Map database format to app format
-        const mappedNews = data.map((item: NyheterDB) => mapNyhetFromDB(item));
+        const mappedNews = data.news.map((item: NyheterDB) => mapNyhetFromDB(item));
         onUpdateNews(mappedNews);
       }
     } catch (error) {
@@ -60,38 +75,234 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
     }
   };
 
+  // Fetch products from Supabase on component mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/products`,
+        {
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error fetching products from server:', errorData);
+        toast.error('Kunne ikke hente produkter fra database');
+        return;
+      }
+
+      const data = await response.json();
+      if (data.products) {
+        // Map database format to app format
+        const mappedProducts = data.products.map((item: any) => {
+          const productData = item as ProdukterDB;
+          const types = item.types || [];
+          return mapProductFromDB(productData, types);
+        });
+        onUpdateProducts(mappedProducts);
+      }
+    } catch (error) {
+      console.error('Feil ved henting av produkter:', error);
+      toast.error('Kunne ikke hente produkter');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
   // Sort news by date, newest first
   const sortedNews = [...news].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  const handleSaveProduct = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const product: Product = {
-      id: editingProduct?.id || Date.now().toString(),
+    let imageUrl = editingProduct?.image; // Keep existing image by default
+
+    // Upload new image if selected
+    if (selectedProductImage) {
+      setIsUploadingProductImage(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', selectedProductImage);
+
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/upload-image`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: uploadFormData,
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error uploading product image:', errorData);
+          toast.error('Kunne ikke laste opp bilde');
+          setIsUploadingProductImage(false);
+          return;
+        }
+
+        const data = await response.json();
+        imageUrl = data.url;
+      } catch (error) {
+        console.error('Error uploading product image:', error);
+        toast.error('Kunne ikke laste opp bilde');
+        setIsUploadingProductImage(false);
+        return;
+      } finally {
+        setIsUploadingProductImage(false);
+      }
+    }
+
+    // If image was explicitly removed, set imageUrl to null
+    if (productImageRemoved) {
+      imageUrl = null;
+    }
+
+    // Parse types from comma-separated string to array
+    const typesString = hasMultipleTypes ? (formData.get('types') as string) : '';
+    const typesArray = typesString 
+      ? typesString.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      : [];
+
+    const product = {
       name: formData.get('name') as string,
       description: formData.get('description') as string,
       price: Number(formData.get('price')),
-      image: formData.get('image') as string,
+      image: imageUrl,
       category: formData.get('category') as string,
+      hasMultipleTypes: hasMultipleTypes,
     };
 
-    if (editingProduct) {
-      onUpdateProducts(products.map(p => p.id === product.id ? product : p));
-      toast.success('Produkt oppdatert');
-    } else {
-      onUpdateProducts([...products, product]);
-      toast.success('Produkt lagt til');
-    }
+    // Map to database format (Norwegian columns)
+    const dbProduct = mapProductToDB(product);
 
-    setEditingProduct(null);
-    setIsProductDialogOpen(false);
+    // Add types array to the request payload
+    const productPayload = {
+      ...dbProduct,
+      types: typesArray,
+    };
+
+    try {
+      if (editingProduct) {
+        // Update existing product via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/products/${editingProduct.id}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: JSON.stringify(productPayload),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved oppdatering av produkt:', errorData);
+          toast.error('Kunne ikke oppdatere produkt');
+          return;
+        }
+        toast.success('Produkt oppdatert');
+      } else {
+        // Insert new product via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/products`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: JSON.stringify(productPayload),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved lagring av produkt:', errorData);
+          toast.error('Kunne ikke lagre produkt');
+          return;
+        }
+        toast.success('Produkt lagt til');
+      }
+
+      // Refresh products list from database
+      await fetchProducts();
+      setEditingProduct(null);
+      setIsProductDialogOpen(false);
+      setSelectedProductImage(null);
+      setProductImagePreview(null);
+      setProductImageRemoved(false);
+      setHasMultipleTypes(false);
+    } catch (error) {
+      console.error('Feil ved lagring av produkt:', error);
+      toast.error('Noe gikk galt ved lagring');
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     if (confirm('Er du sikker på at du vil slette dette produktet?')) {
-      onUpdateProducts(products.filter(p => p.id !== id));
-      toast.success('Produkt slettet');
+      try {
+        // Find the product to get the image URL
+        const product = products.find(p => p.id === id);
+
+        // Delete from database via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/products/${id}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved sletting av produkt:', errorData);
+          toast.error('Kunne ikke slette produkt');
+          return;
+        }
+
+        // Delete image from storage if it exists and is from our bucket
+        if (product?.image && product.image.includes('make-c190d631-news-images')) {
+          try {
+            await fetch(
+              `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/delete-image`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${publicAnonKey}`,
+                },
+                body: JSON.stringify({ url: product.image }),
+              }
+            );
+          } catch (error) {
+            console.error('Error deleting product image:', error);
+            // Continue even if image deletion fails
+          }
+        }
+
+        toast.success('Produkt slettet');
+        // Refresh products list from database
+        await fetchProducts();
+      } catch (error) {
+        console.error('Feil ved sletting av produkt:', error);
+        toast.error('Noe gikk galt ved sletting');
+      }
     }
   };
 
@@ -139,6 +350,11 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
       }
     }
 
+    // If image was explicitly removed, set imageUrl to null
+    if (imageRemoved) {
+      imageUrl = null;
+    }
+
     const newsItem = {
       title: formData.get('title') as string,
       content: formData.get('content') as string,
@@ -150,26 +366,43 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
 
     try {
       if (editingNews) {
-        // Update existing news
-        const { error } = await supabase
-          .from('nyheter')
-          .update(dbNewsItem)
-          .eq('id', editingNews.id);
+        // Update existing news via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/news/${editingNews.id}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: JSON.stringify(dbNewsItem),
+          }
+        );
 
-        if (error) {
-          console.error('Supabase error ved oppdatering:', error);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved oppdatering av nyhet:', errorData);
           toast.error('Kunne ikke oppdatere nyhet');
           return;
         }
         toast.success('Nyhet oppdatert');
       } else {
-        // Insert new news - created_at will be set automatically by Supabase
-        const { error } = await supabase
-          .from('nyheter')
-          .insert([dbNewsItem]);
+        // Insert new news via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/news`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+            body: JSON.stringify(dbNewsItem),
+          }
+        );
 
-        if (error) {
-          console.error('Supabase error ved lagring:', error);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved lagring av nyhet:', errorData);
           toast.error('Kunne ikke lagre nyhet');
           return;
         }
@@ -182,6 +415,7 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
       setIsNewsDialogOpen(false);
       setSelectedImage(null);
       setImagePreview(null);
+      setImageRemoved(false); // Reset image removed flag
     } catch (error) {
       console.error('Feil ved lagring av nyhet:', error);
       toast.error('Noe gikk galt ved lagring');
@@ -194,14 +428,20 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
         // Find the news item to get the image URL
         const newsItem = news.find(n => n.id === id);
 
-        // Delete from database
-        const { error } = await supabase
-          .from('nyheter')
-          .delete()
-          .eq('id', id);
+        // Delete from database via server
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/news/${id}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+          }
+        );
 
-        if (error) {
-          console.error('Supabase error ved sletting:', error);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Server error ved sletting av nyhet:', errorData);
           toast.error('Kunne ikke slette nyhet');
           return;
         }
@@ -252,6 +492,7 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
   const handleRemoveImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
+    setImageRemoved(true); // Set image removed flag
   };
 
   const handleOpenNewsDialog = (newsItem: NewsItem | null) => {
@@ -259,6 +500,35 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
     setIsNewsDialogOpen(true);
     setSelectedImage(null);
     setImagePreview(newsItem?.image || null);
+    setImageRemoved(false); // Reset image removed flag
+  };
+
+  const handleProductImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedProductImage(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProductImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveProductImage = () => {
+    setSelectedProductImage(null);
+    setProductImagePreview(null);
+    setProductImageRemoved(true); // Set image removed flag
+  };
+
+  const handleOpenProductDialog = (product: Product | null) => {
+    setEditingProduct(product);
+    setIsProductDialogOpen(true);
+    setSelectedProductImage(null);
+    setProductImagePreview(product?.image || null);
+    setProductImageRemoved(false); // Reset image removed flag
+    setHasMultipleTypes(!!product?.types); // Set checkbox based on existing types
   };
 
   return (
@@ -276,12 +546,12 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
             <h2 className="text-3xl">Produktadministrasjon</h2>
             <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => setEditingProduct(null)} className="w-full sm:w-auto">
+                <Button onClick={() => handleOpenProductDialog(null)} className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Legg til produkt
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingProduct ? 'Rediger produkt' : 'Legg til produkt'}
@@ -329,16 +599,60 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                     />
                   </div>
                   <div>
-                    <Label htmlFor="image">Bilde (søkeord for Unsplash)</Label>
+                    <Label htmlFor="uploadProductImage">Last opp bilde</Label>
                     <Input
-                      id="image"
-                      name="image"
-                      defaultValue={editingProduct?.image}
-                      required
+                      id="uploadProductImage"
+                      name="uploadProductImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProductImageSelect}
+                      className="cursor-pointer"
                     />
+                    <p className="text-sm text-neutral-500 mt-1">Velg et bilde fra din enhet (mobil eller PC)</p>
+                    {productImagePreview && (
+                      <div className="mt-4">
+                        <img
+                          src={productImagePreview}
+                          alt="Forhåndsvisning"
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRemoveProductImage}
+                          className="mt-2"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Fjern bilde
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button type="submit" className="w-full">
-                    Lagre
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="hasTypes" 
+                      checked={hasMultipleTypes}
+                      onCheckedChange={(checked) => setHasMultipleTypes(checked as boolean)}
+                    />
+                    <Label htmlFor="hasTypes" className="cursor-pointer">
+                      Dette produktet har flere typer
+                    </Label>
+                  </div>
+                  {hasMultipleTypes && (
+                    <div>
+                      <Label htmlFor="types">Typer (separert med komma)</Label>
+                      <Input
+                        id="types"
+                        name="types"
+                        placeholder="f.eks. Kanel, Karamell"
+                        defaultValue={editingProduct?.types?.join(', ')}
+                      />
+                      <p className="text-sm text-neutral-500 mt-1">Skriv inn de forskjellige typene adskilt med komma</p>
+                    </div>
+                  )}
+                  <Button type="submit" className="w-full" disabled={isUploadingProductImage}>
+                    {isUploadingProductImage ? 'Laster opp...' : 'Lagre'}
                   </Button>
                 </form>
               </DialogContent>
@@ -352,16 +666,25 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                   <CardTitle>{product.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {product.image && (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-48 object-cover rounded-lg mb-4"
+                    />
+                  )}
                   <p className="text-neutral-600 mb-2">{product.description}</p>
-                  <p className="mb-4">{product.price} kr</p>
+                  <p className="mb-2">{product.price} kr</p>
+                  {product.types && product.types.length > 0 && (
+                    <p className="text-sm text-neutral-500 mb-4">
+                      Typer: {product.types.join(', ')}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        setEditingProduct(product);
-                        setIsProductDialogOpen(true);
-                      }}
+                      onClick={() => handleOpenProductDialog(product)}
                     >
                       <Edit className="h-4 w-4 mr-2" />
                       Rediger
@@ -446,7 +769,7 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                           onClick={handleRemoveImage}
                           className="mt-2"
                         >
-                          <div className="h-4 w-4 mr-2" />
+                          <X className="h-4 w-4 mr-2" />
                           Fjern bilde
                         </Button>
                       </div>
