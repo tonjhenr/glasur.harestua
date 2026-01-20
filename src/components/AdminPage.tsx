@@ -579,6 +579,28 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                       required
                     />
                   </div>
+                                    <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="hasTypes" 
+                      checked={hasMultipleTypes}
+                      onCheckedChange={(checked) => setHasMultipleTypes(checked as boolean)}
+                    />
+                    <Label htmlFor="hasTypes" className="cursor-pointer">
+                      Dette produktet har flere typer
+                    </Label>
+                  </div>
+                  {hasMultipleTypes && (
+                    <div>
+                      <Label htmlFor="types">Typer (separert med komma)</Label>
+                      <Input
+                        id="types"
+                        name="types"
+                        placeholder="f.eks. Kanel, Karamell"
+                        defaultValue={editingProduct?.types?.join(', ')}
+                      />
+                      <p className="text-sm text-neutral-500 mt-1">Skriv inn de forskjellige typene adskilt med komma</p>
+                    </div>
+                  )}
                   <div>
                     <Label htmlFor="price">Pris (kr)</Label>
                     <Input
@@ -629,28 +651,6 @@ export function AdminPage({ products, news, onUpdateProducts, onUpdateNews }: Ad
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="hasTypes" 
-                      checked={hasMultipleTypes}
-                      onCheckedChange={(checked) => setHasMultipleTypes(checked as boolean)}
-                    />
-                    <Label htmlFor="hasTypes" className="cursor-pointer">
-                      Dette produktet har flere typer
-                    </Label>
-                  </div>
-                  {hasMultipleTypes && (
-                    <div>
-                      <Label htmlFor="types">Typer (separert med komma)</Label>
-                      <Input
-                        id="types"
-                        name="types"
-                        placeholder="f.eks. Kanel, Karamell"
-                        defaultValue={editingProduct?.types?.join(', ')}
-                      />
-                      <p className="text-sm text-neutral-500 mt-1">Skriv inn de forskjellige typene adskilt med komma</p>
-                    </div>
-                  )}
                   <Button type="submit" className="w-full" disabled={isUploadingProductImage}>
                     {isUploadingProductImage ? 'Laster opp...' : 'Lagre'}
                   </Button>

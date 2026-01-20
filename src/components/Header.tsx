@@ -1,7 +1,7 @@
 import { ShoppingCart, Menu, X, LogIn, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
-import logo from 'figma:asset/ef6a37961f64004c649f85d97770b18fa518692b.png';
+import logo from '../../img/logo.png';
 
 type HeaderProps = {
   currentPage: 'home' | 'products' | 'admin' | 'login' | 'account';
@@ -33,8 +33,8 @@ export function Header({ currentPage, onNavigate, cartItemCount, isLoggedIn, isA
             onClick={() => onNavigate('home')}
             className="flex items-center gap-3"
           >
-            <img src={logo} alt="Glasur.Harestua" className="h-14 w-auto" />
-            <span className="text-xl text-white">Glasur.Harestua</span>
+            <img src={logo} alt="GlaSUR BAKERI" className="h-14 w-auto" />
+            <span className="text-xl text-white">GlaSUR BAKERI</span>
           </button>
 
           {/* Desktop Navigation */}

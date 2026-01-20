@@ -16,12 +16,18 @@ type CheckoutDialogProps = {
   total: number;
   onOrderComplete: () => void;
 };
+type Hentedag = "saturday" | "sunday" | null;
+type Hentested =
+  | "butikk"
+  | "kiwi-grua"
+  | "kiwi-harestua"
+  | null;
 
 export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: CheckoutDialogProps) {
   const [step, setStep] = useState<'info' | 'payment'>('info');
   const [name, setName] = useState('');
-  const [levering, setLevering] = useState('');
-  const [address, setAddress] = useState('');
+  const [hentedag, setHentedag] = useState<Hentedag>(null);
+  const [hentested, setHentested] = useState<Hentested>(null);
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [result, setResult] = useState("");
@@ -32,16 +38,8 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
 
   const handleInfoSubmit = async(e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !address.trim() || !phone.trim()) {
+    if (!name.trim() || !phone.trim() || !hentedag || !hentested) {
       toast.error('Vennligst fyll ut alle påkrevde felt');
-      return;
-    }
-
-    // Validate address: at least 5 letters and 1 number
-    const letterCount = (address.match(/[a-zæøåA-ZÆØÅ]/g) || []).length;
-    const numberCount = (address.match(/\d/g) || []).length;
-    if (letterCount < 5 || numberCount < 1) {
-      toast.error('Adressen må inneholde minst 5 bokstaver og 1 tall');
       return;
     }
 
@@ -83,8 +81,8 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
   const handleClose = () => {
     setStep('info');
     setName('');
-    setLevering('');
-    setAddress('');
+    setHentedag(null);
+    setHentested(null);
     setPhone('');
     setMessage('');
     setCardNumber('');
@@ -99,11 +97,11 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {step === 'info' ? 'Leveringsinformasjon' : 'Betaling'}
+            {step === 'info' ? 'Bestillingsinformasjon' : 'Betaling'}
           </DialogTitle>
           <DialogDescription>
             {step === 'info' 
-              ? 'Fyll ut leveringsinformasjon for din bestilling'
+              ? 'Fyll ut informasjon for din bestilling'
               : 'Velg betalingsmetode'
             }
           </DialogDescription>
@@ -122,29 +120,7 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">Vil du ha varene levert?</Label>
-              <input 
-                type="checkbox" 
-                id="levering" 
-                name="levering"
-                value={levering}
-                onChange={(e) => setLevering(e.target.checked ? 'levering' : '')}>
-                </input>                
-            </div>
-    {levering === 'levering' && (
-    <div className="space-y-2">
-      <Label htmlFor="address">Adresse *</Label>
-      <Input
-        id="address"
-        name="adresse"
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        placeholder="Eksempelveien 1, 1234 Oslo"
-      />
-    </div>
-    )}
-            <div className="space-y-2">
+              <div className="space-y-2">
               <Label htmlFor="phone">Telefonnummer *</Label>
               <Input
                 id="phone"
@@ -156,7 +132,152 @@ export function CheckoutDialog({ open, onClose, cart, total, onOrderComplete }: 
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label>
+              <input
+                    type="radio"
+                    name="hentedag"
+                    value="saturday"
+                    checked={hentedag === "saturday"}
+                    onChange={() => {
+                      setHentedag("saturday");
+                      setHentested(null); // reset når dag endres
+                    }}
+                  /> Bestillingen hentes lørdag   
+                  </Label> 
+               {hentedag === "saturday" && (
+                <div className="space-y-2 mt-4">
+                
+                  <div className="grid grid-cols-3 gap-1">
+    <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "butikk"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="butikk"
+                      checked={hentested === "butikk"}
+                      onChange={() => setHentested("butikk")}
+                    />
+                    Lugn Kafé
+                  </label>
 
+                      <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "kiwi-grua"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="kiwi-grua"
+                      checked={hentested === "kiwi-grua"}
+                      onChange={() => setHentested("kiwi-grua")}
+                    />
+                    Kiwi Grua
+                  </label>
+
+                     <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "kiwi-harestua"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="kiwi-harestua"
+                      checked={hentested === "kiwi-harestua"}
+                      onChange={() => setHentested("kiwi-harestua")}
+                    />
+                    Kiwi Harestua
+                  </label>
+                </div>
+                </div>
+              )}
+              <Label>
+              <input
+                    type="radio"
+                    name="hentedag"
+                    value="sunday"
+                    checked={hentedag === "sunday"}
+                    onChange={() => {
+                      setHentedag("sunday");
+                      setHentested(null); // reset når dag endres
+                    }}
+                  /> Bestillingen hentes søndag   
+                  </Label>  
+                  {hentedag === "sunday" && (
+                <div className="space-y-2 mt-4">
+                
+                  <div className="grid grid-cols-3 gap-1">
+    <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "butikk"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="butikk"
+                      checked={hentested === "butikk"}
+                      onChange={() => setHentested("butikk")}
+                    />
+                    Lugn Kafé
+                  </label>
+
+                      <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "kiwi-grua"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="kiwi-grua"
+                      checked={hentested === "kiwi-grua"}
+                      onChange={() => setHentested("kiwi-grua")}
+                    />
+                    Kiwi Grua
+                  </label>
+
+                     <label
+      className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition text-sm
+        ${
+          hentested === "kiwi-harestua"
+            ? "border-gray-900 bg-gray-100"
+            : "border-gray-300 hover:bg-gray-50"
+        }`}
+    >
+                    <input
+                      type="radio"
+                      name="hentested"
+                      value="kiwi-harestua"
+                      checked={hentested === "kiwi-harestua"}
+                      onChange={() => setHentested("kiwi-harestua")}
+                    />
+                    Kiwi Harestua
+                  </label>
+                </div>
+                </div>
+              )}       
+            </div>
             <div className="space-y-2">
               <Label htmlFor="message">Annen beskjed</Label>
               <Textarea

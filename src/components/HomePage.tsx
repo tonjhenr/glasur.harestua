@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from "./ui/card";
 import { NewsItem } from "../App";
-import logo from "figma:asset/ef6a37961f64004c649f85d97770b18fa518692b.png";
+import logo from "../../img/logo.png";
 
 type HomePageProps = {
   news: NewsItem[];
@@ -100,8 +100,9 @@ export function HomePage({ news }: HomePageProps) {
             <CardContent className="flex items-center gap-3 pt-6">
               <MapPin className="h-8 w-8 text-primary" />
               <div>
-                <p>Harestua</p>
-                <p>Lunner kommune</p>
+                <p>Lugn Kafé</p>
+                <p>Garverivegen 4</p>
+                <p>2740 Roa</p>
               </div>
             </CardContent>
           </Card>
