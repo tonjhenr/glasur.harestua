@@ -12,6 +12,8 @@ type ProductsPageProps = {
   onAddToCart: (product: Product, variant?: string) => void;
   onUpdateCartQuantity: (productId: string, quantity: number, variant?: string) => void;
   onClearCart: () => void;
+  initialCategory?: string;
+  setInitialCategory?: (category: string) => void;
 };
 
 export function ProductsPage({ 
@@ -19,11 +21,16 @@ export function ProductsPage({
   cart, 
   onAddToCart, 
   onUpdateCartQuantity,
-  onClearCart 
+  onClearCart, 
+  initialCategory = 'alle',
+  setInitialCategory
 }: ProductsPageProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string>('alle');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
+
+    // Update selected category when initialCategory changes
+  useEffect(() => {
+    setSelectedCategory(initialCategory);
+  }, [initialCategory]);
 
   const categories = ['alle', ...Array.from(new Set(products.map(p => p.category)))];
   
@@ -33,25 +40,13 @@ export function ProductsPage({
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<{ open: boolean }>;
-      const isOpen = Boolean(custom?.detail?.open);
-      setProductDialogOpen(isOpen);
-      if (isOpen) setSheetOpen(false);
-    };
-
-    window.addEventListener('product-options-dialog', handler as EventListener);
-    return () => window.removeEventListener('product-options-dialog', handler as EventListener);
-  }, []);
-
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-4xl">Våre produkter</h1>
         
         {/* Cart Button for Mobile */}
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <Sheet>
           <SheetTrigger asChild>
             <Button className="md:hidden relative static">
               <ShoppingCart className="h-5 w-5" />
@@ -107,8 +102,7 @@ export function ProductsPage({
         </div>
 
         {/* Cart Sidebar for Desktop */}
-        {!productDialogOpen && (
-          <div className="hidden md:block">
+        <div className="hidden md:block">
           <div className="sticky top-24">
             <h2 className="mb-4">Handlekurv</h2>
             <Cart 
@@ -117,8 +111,7 @@ export function ProductsPage({
               onClearCart={onClearCart}
             />
           </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

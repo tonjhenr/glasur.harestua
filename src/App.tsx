@@ -11,9 +11,18 @@ import {
 } from "./components/CustomerAccountPage";
 import { Footer } from "./components/Footer";
 import { Toaster } from "./components/ui/sonner";
-import { supabase, mapNyhetFromDB, NyheterDB, mapProductFromDB, ProdukterDB, Product } from './assets/supabase-client';
-import { projectId, publicAnonKey } from './assets/info';
-
+import {
+  supabase,
+  mapNyhetFromDB,
+  NyheterDB,
+  mapProductFromDB,
+  ProdukterDB,
+  Product,
+} from "./assets/supabase-client";
+import {
+  projectId,
+  publicAnonKey,
+} from "./assets/info";
 
 export type NewsItem = {
   id: string;
@@ -41,6 +50,7 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [customerData, setCustomerData] = useState<CustomerData | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [initialCategory, setInitialCategory] = useState<string>('alle');
 
    // Fetch news from Supabase on component mount
   useEffect(() => {
@@ -50,21 +60,29 @@ export default function App() {
 
   const fetchNews = async () => {
     try {
-      const { data, error } = await supabase
-        .from("nyheter")
-        .select("*");
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-c190d631/news`,
+        {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+          },
+        },
+      );
 
-      if (error) {
+      if (!response.ok) {
+        const errorData = await response.json();
         console.error(
-          "Supabase error ved henting av nyheter:",
-          error,
+          "Server error ved henting av nyheter:",
+          errorData,
         );
         return;
       }
 
-      if (data) {
+      const data = await response.json();
+      
+      if (data.news) {
         // Map database format to app format
-        const mappedNews = data.map((item: NyheterDB) =>
+        const mappedNews = data.news.map((item: NyheterDB) =>
           mapNyhetFromDB(item),
         );
         setNews(mappedNews);
@@ -111,38 +129,31 @@ export default function App() {
     }
   };
 
-  const handleLogin = (
-    username: string,
-    password: string,
-    isAdminLogin: boolean,
-  ): boolean => {
-    if (isAdminLogin) {
-      // Admin login
-      if (username === "admin" && password === "admin123") {
-        setIsAdminLoggedIn(true);
-        localStorage.setItem("isAdminLoggedIn", "true");
-        setCurrentPage("admin");
-        return true;
-      }
-    } else {
-      // Customer login
-      const customer = customerData;
-      if (
-        customer &&
-        customer.email === username &&
-        customer.password === password
-      ) {
-        setCustomerData(customer);
-        localStorage.setItem(
-          "customerData",
-          JSON.stringify(customer),
-        );
-        setCurrentPage("customer-account");
-        return true;
-      }
-    }
+  const handleLogin = async (
+  username: string,
+  password: string,
+  isAdminLogin: boolean,
+): Promise<boolean> => {
+
+  if (!isAdminLogin) {
     return false;
-  };
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: username,
+    password: password,
+  });
+
+  if (error) {
+    console.error("Supabase error ved login for admin:", error);
+    return false;
+  }
+
+  // ✅ Login OK
+  setIsAdminLoggedIn(true);
+  setCurrentPage("admin");
+  return true;
+};
 
   const handleRegister = (
     email: string,
@@ -172,13 +183,13 @@ export default function App() {
     return true;
   };
 
-  const handleLogout = () => {
-    setIsAdminLoggedIn(false);
-    setCustomerData(null);
-    localStorage.removeItem("isAdminLoggedIn");
-    localStorage.removeItem("customerData");
-    setCurrentPage("home");
-  };
+const handleLogout = async () => {
+  await supabase.auth.signOut(); // Sign out from Supabase
+
+  setIsAdminLoggedIn(false);
+  setCustomerData(null);
+  setCurrentPage("home");
+};
 
   const handleUpdateProfile = (data: Partial<CustomerData>) => {
     if (!customerData) return;
@@ -278,19 +289,28 @@ export default function App() {
           (sum, item) => sum + item.quantity,
           0,
         )}
+        isLoggedIn={isAdminLoggedIn}
         isAdmin={isAdminLoggedIn}
         onLogout={handleLogout}
       />
 
       <main className="flex-grow">
-        {currentPage === "home" && <HomePage news={news} />}
+        {currentPage === "home" && (
+          <HomePage 
+            news={news} 
+            onNavigate={setCurrentPage}
+            onCategorySelect={setInitialCategory}
+          />
+        )}
         {currentPage === "products" && (
-          <ProductsPage
+           <ProductsPage
             products={products}
             cart={cart}
             onAddToCart={addToCart}
             onUpdateCartQuantity={updateCartQuantity}
             onClearCart={clearCart}
+            initialCategory={initialCategory}
+            setInitialCategory={setInitialCategory}
           />
         )}
         {currentPage === "login" && (

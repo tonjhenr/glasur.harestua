@@ -16,14 +16,15 @@ import {
   TabsTrigger,
 } from "./ui/tabs";
 import { toast } from "sonner@2.0.3";
-import logo from "figma:asset/ef6a37961f64004c649f85d97770b18fa518692b.png";
+import logo from "../assets/img/logo.png";
+import front from "../assets/img/front.png";
 
 type LoginPageProps = {
   onLogin: (
     username: string,
     password: string,
     isAdmin: boolean,
-  ) => boolean;
+  ) => Promise<boolean>;
   onRegister?: (
     email: string,
     password: string,
@@ -47,11 +48,11 @@ export function LoginPage({
   const [registerName, setRegisterName] = useState("");
   const [registerError, setRegisterError] = useState("");
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const success = onLogin(username, password, true);
+   const success = await onLogin(username, password, true);
 
     if (success) {
       toast.success("Velkommen!");
@@ -100,7 +101,7 @@ export function LoginPage({
         <CardHeader className="text-center">
           <img
             src={logo}
-            alt="Glasur.Harestua"
+            alt="Glasur Bakeri Logo"
             className="h-20 w-auto mx-auto mb-4"
           />
           <CardTitle>
@@ -154,10 +155,6 @@ export function LoginPage({
               <Button type="submit" className="w-full">
                 Logg inn som admin
               </Button>
-
-              <div className="text-center text-muted-foreground mt-4">
-                <p>Demo: admin / admin123</p>
-              </div>
             </form>
           ) : (
             <Tabs defaultValue="customer" className="w-full">

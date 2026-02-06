@@ -1,7 +1,7 @@
 import { ShoppingCart, Menu, X, LogIn, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
-import logo from '../../img/logo.png';
+import logo from "../assets/img/logo.png";
 
 type HeaderProps = {
   currentPage: 'home' | 'products' | 'admin' | 'login' | 'account';
@@ -34,7 +34,7 @@ export function Header({ currentPage, onNavigate, cartItemCount, isLoggedIn, isA
             className="flex items-center gap-3"
           >
             <img src={logo} alt="GlaSUR BAKERI" className="h-14 w-auto" />
-            <span className="text-xl text-white">GlaSUR BAKERI</span>
+            <span className="text-xl text-white">glaSUR Bakeri</span>
           </button>
 
           {/* Desktop Navigation */}
@@ -60,7 +60,7 @@ export function Header({ currentPage, onNavigate, cartItemCount, isLoggedIn, isA
                 </span>
               </div>
             )}
-            {isLoggedIn && (
+            {isAdmin && (
               <Button
                 variant="outline"
                 size="sm"
