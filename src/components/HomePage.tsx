@@ -10,7 +10,7 @@ import { Button } from "./ui/button";
 import focacciaImg from "../assets/img/focaccia.jpg";
 import konfektImg from "../assets/img/konfekt.jpg";
 import wienerbrodImg from "../assets/img/WIENERBRODSNURRER.jpg";
-import hamburgerImg from "../assets/img/hamburgerbrod.jpg";
+import hamburgerImg from "../assets/img/Hamburgerbrod.jpg";
 
 
 type HomePageProps = {
